@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <title>Minecraft Dynamic D-Day Widget</title>
+    <!-- 구글 픽셀 폰트 로드 -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+    
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+        body, html {
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            font-family: 'Press Start 2P', cursive;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        .background {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            image-rendering: pixelated; 
+            background-image: url('https://images.unsplash.com/photo-1627856013091-fed6e4e30025?q=80&w=1000'); 
+            background-size: cover;
+            background-position: center;
+            z-index: 1;
+        }
+        .widget-container {
+            position: relative;
+            z-index: 2;
+            background: rgba(0, 0, 0, 0.6); 
+            border: 4px solid #3c3c3c;
+            border-top-color: #8f8f8f;
+            border-left-color: #8f8f8f;
+            padding: 25px;
+            text-align: center;
+            color: #ffffff;
+            text-shadow: 3px 3px 0px #3f3f3f; 
+            min-width: 300px;
+        }
+        .clock {
+            font-size: 2.5rem;
+            margin-bottom: 20px;
+            color: #ffff55; 
+        }
+        .event-name {
+            font-size: 1rem;
+            margin-bottom: 10px;
+            color: #ffffff; 
+            word-break: keep-all;
+        }
+        .dday {
+            font-size: 1.5rem;
+            color: #55ff55; 
+        }
+    </style>
+</head>
+<body>
+
+    <div class="background"></div>
+    
+    <div class="widget-container">
+        <!-- 시계 영역 -->
+        <div class="clock" id="clock">00:00:00</div>
+        <!-- 노션에서 가져온 일정 이름 -->
+        <div class="event-name" id="eventName">CONNECTING...</div>
+        <!-- 디데이 영역 -->
+        <div class="dday" id="dday"></div>
+    </div>
+
+    <script>
+        // ★여기에 Vercel(또는 호스팅한 서버) API 주소를 넣으세요★
+        const API_URL = "/api/get-closest-event";
+
+        let targetDate = null;
+        let eventNameStr = "LOADING...";
+
+        // 서버에서 노션 일정을 가져오는 함수
+        async function fetchNotionEvent() {
+            try {
+                const response = await fetch(API_URL);
+                if (!response.ok) throw new Error("API 연동 실패");
+                
+                const data = await response.json();
+
+                if (data.date) {
+                    // 서버에서 받은 'YYYY-MM-DD' 형태를 자정 기준으로 설정
+                    targetDate = new Date(data.date + "T00:00:00");
+                    eventNameStr = data.name;
+                } else {
+                    targetDate = null;
+                    eventNameStr = "NO UPCOMING EVENTS";
+                }
+            } catch (error) {
+                console.error("데이터 로드 에러:", error);
+                eventNameStr = "API ERROR";
+                targetDate = null;
+            }
+        }
+
+        // 화면을 업데이트하는 함수
+        function updateWidget() {
+            const now = new Date();
+
+            // 1. 시계 업데이트 (HH:MM:SS)
+            const hours = String(now.getHours()).padStart(2, '0');
+            const minutes = String(now.getMinutes()).padStart(2, '0');
+            const seconds = String(now.getSeconds()).padStart(2, '0');
+            document.getElementById('clock').innerText = `${hours}:${minutes}:${seconds}`;
+
+            // 2. 디데이 및 일정 이름 업데이트
+            document.getElementById('eventName').innerText = eventNameStr;
+
+            if (targetDate) {
+                // 정확한 날짜 차이 계산을 위해 시간을 자정으로 초기화하여 비교
+                const todayMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+                const targetMidnight = new Date(targetDate.getFullYear(), targetDate.getMonth(), targetDate.getDate());
+                
+                const difference = targetMidnight - todayMidnight;
+                const daysLeft = Math.round(difference / (1000 * 60 * 60 * 24));
+
+                let ddayText = "";
+                if (daysLeft > 0) {
+                    ddayText = `D-${daysLeft}`;
+                } else if (daysLeft === 0) {
+                    ddayText = "D-DAY!";
+                } else {
+                    ddayText = `D+${Math.abs(daysLeft)}`;
+                }
+                document.getElementById('dday').innerText = ddayText;
+            } else {
+                document.getElementById('dday').innerText = "";
+            }
+        }
+
+        // 초기 실행 및 타이머 설정
+        async function init() {
+            await fetchNotionEvent(); // 최초 1회 데이터 로드
+            updateWidget(); // 즉시 화면 렌더링
+
+            // 시계는 1초마다 갱신
+            setInterval(updateWidget, 1000);
+            
+            // 노션 API 호출은 1시간(3600000ms)마다 갱신 (API 요금 및 제한 방지)
+            setInterval(fetchNotionEvent, 1000 * 60 * 60);
+        }
+
+        init();
+    </script>
+</body>
+</html>
